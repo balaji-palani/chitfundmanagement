@@ -57,5 +57,5 @@ const seed = async () => {
     }
 };
 
-// Wait for DB connection before seeding
-setTimeout(seed, 1000);
+// Wait for DB connection and initialization before seeding
+db.initPromise.then(seed);
