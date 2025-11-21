@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Layout = ({ children }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const location = useLocation();
+    const { user, logout } = useAuth();
 
     const navItems = [
         { path: '/', label: 'Dashboard', icon: '📊' },
@@ -12,6 +14,10 @@ const Layout = ({ children }) => {
         { path: '/reports', label: 'Reports', icon: '📈' },
         { path: '/calculator', label: 'Calculator', icon: '🧮' },
     ];
+
+    if (user?.role === 'admin') {
+        navItems.push({ path: '/admin/users', label: 'Admin Users', icon: '🛡️' });
+    }
 
     return (
         <div className="min-h-screen bg-background flex relative">
@@ -42,13 +48,14 @@ const Layout = ({ children }) => {
                     )}
                 </nav>
                 <div className="p-4 border-t border-slate-100">
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                        <p className="text-xs text-slate-500 font-medium">System Status</p>
-                        <div className="flex items-center gap-2 mt-2">
-                            <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
-                            <span className="text-sm text-slate-700">Online</span>
-                        </div>
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 mb-2">
+                        <p className="text-xs text-slate-500 font-medium">Logged in as</p>
+                        <p className="text-sm font-bold text-slate-800">{user?.username}</p>
                     </div>
+                    <button onClick={logout} className="w-full flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <span>🚪</span>
+                        <span className="font-medium">Logout</span>
+                    </button>
                 </div>
             </aside>
 

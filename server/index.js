@@ -9,6 +9,16 @@ const PORT = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
+const authRoutes = require('./routes/auth');
+const authenticateToken = require('./middleware/auth');
+
+app.use('/api/auth', authRoutes);
+
+// Protect all API routes that modify data (POST, PUT, DELETE)
+// For simplicity, we apply it to specific routes or globally for non-GET
+// app.use('/api/members', authenticateToken); // Example protection
+
+
 // --- MEMBERS ---
 
 // Get all members
@@ -22,7 +32,7 @@ app.get('/api/members', async (req, res) => {
 });
 
 // Add member
-app.post('/api/members', async (req, res) => {
+app.post('/api/members', authenticateToken, async (req, res) => {
     const { name, contact, notes } = req.body;
     try {
         const result = await db.query(
@@ -52,7 +62,7 @@ app.get('/api/chits', async (req, res) => {
 });
 
 // Create chit
-app.post('/api/chits', async (req, res) => {
+app.post('/api/chits', authenticateToken, async (req, res) => {
     const { name, total_amount, start_date, duration_months, commission_percent } = req.body;
     const commission = commission_percent || 5.0;
     try {
@@ -67,10 +77,24 @@ app.post('/api/chits', async (req, res) => {
 });
 
 // Add member to chit
-app.post('/api/chits/:id/members', async (req, res) => {
+app.post('/api/chits/:id/members', authenticateToken, async (req, res) => {
     const { member_id } = req.body;
     const chit_id = req.params.id;
     try {
+        // Check if limit reached
+        const chitRes = await db.query('SELECT duration_months FROM chits WHERE id = $1', [chit_id]);
+        if (chitRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Chit not found' });
+        }
+        const duration = chitRes.rows[0].duration_months;
+
+        const countRes = await db.query('SELECT COUNT(*) FROM chit_members WHERE chit_id = $1', [chit_id]);
+        const currentCount = parseInt(countRes.rows[0].count);
+
+        if (currentCount >= duration) {
+            return res.status(400).json({ error: `Chit member limit reached (${duration} members max)` });
+        }
+
         await db.query(
             'INSERT INTO chit_members (chit_id, member_id) VALUES ($1, $2)',
             [chit_id, member_id]
@@ -99,7 +123,7 @@ app.get('/api/chits/:id/members', async (req, res) => {
 // --- CYCLES ---
 
 // Record a cycle
-app.post('/api/chits/:id/cycles', async (req, res) => {
+app.post('/api/chits/:id/cycles', authenticateToken, async (req, res) => {
     const { month_number, month_year, bid_amount, winner_member_id } = req.body;
     const chit_id = req.params.id;
     try {
@@ -143,7 +167,7 @@ app.get('/api/cycles/:id/payments', async (req, res) => {
 });
 
 // Update payment status
-app.post('/api/cycles/:id/payments', async (req, res) => {
+app.post('/api/cycles/:id/payments', authenticateToken, async (req, res) => {
     const { member_id, status } = req.body;
     const cycle_id = req.params.id;
     const paid_date = status === 'paid' ? new Date().toISOString() : null;
