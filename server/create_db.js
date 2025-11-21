@@ -2,11 +2,8 @@ require('dotenv').config();
 const { Client } = require('pg');
 
 const client = new Client({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-    database: 'postgres' // Connect to default DB first
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 async function createDatabase() {
