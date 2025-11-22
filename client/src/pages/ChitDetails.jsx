@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 
+import { useAuth } from '../context/AuthContext';
+
 const ChitDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -15,6 +17,8 @@ const ChitDetails = () => {
     const [showAddCycle, setShowAddCycle] = useState(false);
 
     const [expandedCycle, setExpandedCycle] = useState(null);
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
 
     const togglePayments = (cycleId) => {
         if (expandedCycle === cycleId) setExpandedCycle(null);
@@ -44,7 +48,10 @@ const ChitDetails = () => {
             try {
                 await api.post(`/cycles/${cycleId}/payments`, { member_id: memberId, status: newStatus });
                 setPayments(prev => ({ ...prev, [memberId]: newStatus }));
-            } catch (err) { console.error(err); }
+            } catch (err) {
+                console.error(err);
+                alert(err.response?.data?.error || 'Failed to update payment');
+            }
         };
 
         if (loading) return <div className="text-sm text-slate-500">Loading payments...</div>;
@@ -56,9 +63,9 @@ const ChitDetails = () => {
                     return (
                         <div
                             key={m.id}
-                            onClick={() => togglePayment(m.id, payments[m.id])}
-                            className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-colors ${isPaid ? 'bg-success/10 border-success text-success' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                                }`}
+                            onClick={isAdmin ? () => togglePayment(m.id, payments[m.id]) : undefined}
+                            className={`p-2 rounded border flex items-center gap-2 transition-colors ${isPaid ? 'bg-success/10 border-success text-success' : 'bg-white border-slate-200 text-slate-500'} ${isAdmin ? 'cursor-pointer hover:border-slate-300' : 'cursor-default'}
+                                `}
                         >
                             <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isPaid ? 'bg-success border-success' : 'border-slate-300'
                                 }`}>
@@ -126,7 +133,10 @@ const ChitDetails = () => {
             await api.post(`/chits/${id}/members`, { member_id: selectedMember });
             setShowAddMember(false);
             fetchChitMembers();
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+            alert(err.response?.data?.error || 'Failed to add member');
+        }
     };
 
     const handleAddCycle = async (e) => {
@@ -135,7 +145,10 @@ const ChitDetails = () => {
             await api.post(`/chits/${id}/cycles`, cycleData);
             setShowAddCycle(false);
             fetchCycles();
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+            alert(err.response?.data?.error || 'Failed to record cycle');
+        }
     };
 
     if (!chit) return <div className="p-8 text-center">Loading...</div>;
@@ -180,12 +193,14 @@ const ChitDetails = () => {
                     <div className="card">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold">Members ({chitMembers.length})</h3>
-                            <button
-                                onClick={() => setShowAddMember(true)}
-                                className="text-sm text-accent font-medium hover:underline"
-                            >
-                                + Add
-                            </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => setShowAddMember(true)}
+                                    className="text-sm text-accent font-medium hover:underline"
+                                >
+                                    + Add
+                                </button>
+                            )}
                         </div>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto">
                             {chitMembers.map(m => (
@@ -211,12 +226,14 @@ const ChitDetails = () => {
                     <div className="card">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold">Monthly Cycles</h3>
-                            <button
-                                onClick={() => setShowAddCycle(true)}
-                                className="btn btn-primary text-sm"
-                            >
-                                Record New Month
-                            </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => setShowAddCycle(true)}
+                                    className="btn btn-primary text-sm"
+                                >
+                                    Record New Month
+                                </button>
+                            )}
                         </div>
 
                         <div className="overflow-x-auto">

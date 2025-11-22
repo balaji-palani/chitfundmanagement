@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 
+import { useAuth } from '../context/AuthContext';
+
 const Chits = () => {
     const [chits, setChits] = useState([]);
     const [showModal, setShowModal] = useState(false);
@@ -11,6 +13,8 @@ const Chits = () => {
         commission_percent: '5.0',
         start_date: new Date().toISOString().split('T')[0]
     });
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
         fetchChits();
@@ -40,6 +44,7 @@ const Chits = () => {
             fetchChits();
         } catch (err) {
             console.error(err);
+            alert(err.response?.data?.error || 'Failed to create chit');
         }
     };
 
@@ -50,12 +55,14 @@ const Chits = () => {
                     <h2 className="text-3xl font-bold text-primary">Chit Schemes</h2>
                     <p className="text-slate-500 mt-1">Create and manage your chit groups</p>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="btn btn-primary flex items-center gap-2"
-                >
-                    <span>+</span> New Chit
-                </button>
+                {isAdmin && (
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="btn btn-primary flex items-center gap-2"
+                    >
+                        <span>+</span> New Chit
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

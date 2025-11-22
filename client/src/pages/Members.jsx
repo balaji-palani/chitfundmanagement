@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 
+import { useAuth } from '../context/AuthContext';
+
 const Members = () => {
     const [members, setMembers] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({ name: '', contact: '', notes: '' });
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
         fetchMembers();
@@ -28,6 +32,7 @@ const Members = () => {
             fetchMembers();
         } catch (err) {
             console.error(err);
+            alert(err.response?.data?.error || 'Failed to add member');
         }
     };
 
@@ -38,12 +43,14 @@ const Members = () => {
                     <h2 className="text-3xl font-bold text-primary">Members</h2>
                     <p className="text-slate-500 mt-1">Manage your chit fund participants</p>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="btn btn-primary flex items-center gap-2"
-                >
-                    <span>+</span> Add Member
-                </button>
+                {isAdmin && (
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="btn btn-primary flex items-center gap-2"
+                    >
+                        <span>+</span> Add Member
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

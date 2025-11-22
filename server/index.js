@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 
 const authRoutes = require('./routes/auth');
 const authenticateToken = require('./middleware/auth');
+const requireAdmin = require('./middleware/authorize');
 
 app.use('/api/auth', authRoutes);
 
@@ -31,8 +32,57 @@ app.get('/api/members', async (req, res) => {
     }
 });
 
+// Get member payment history
+app.get('/api/members/:id/payments', authenticateToken, async (req, res) => {
+    const member_id = req.params.id;
+    try {
+        const sql = `
+            SELECT 
+                c.name as chit_name,
+                c.total_amount,
+                c.commission_percent,
+                cc.id as cycle_id,
+                cc.month_year,
+                cc.month_number,
+                cc.bid_amount,
+                cp.status,
+                cp.paid_date,
+                (SELECT COUNT(*) FROM chit_members WHERE chit_id = c.id)::int as member_count
+            FROM chit_cycles cc
+            JOIN chits c ON cc.chit_id = c.id
+            JOIN chit_members cm ON c.id = cm.chit_id
+            LEFT JOIN cycle_payments cp ON cc.id = cp.cycle_id AND cp.member_id = $1
+            WHERE cm.member_id = $1
+            ORDER BY cc.month_number DESC, c.name
+        `;
+
+        const result = await db.query(sql, [member_id]);
+
+        const history = result.rows.map(row => {
+            const commission = row.total_amount * (row.commission_percent / 100);
+            const dividendPool = row.bid_amount - commission;
+            const dividendPerMember = row.member_count > 0 ? dividendPool / row.member_count : 0;
+            const payable = (row.total_amount / row.member_count) - dividendPerMember;
+
+            return {
+                chit_name: row.chit_name,
+                month_year: row.month_year,
+                payable_amount: Math.round(payable),
+                status: row.status || 'pending',
+                paid_date: row.paid_date,
+                total_amount: row.total_amount,
+                bid_amount: row.bid_amount
+            };
+        });
+
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Add member
-app.post('/api/members', authenticateToken, async (req, res) => {
+app.post('/api/members', authenticateToken, requireAdmin, async (req, res) => {
     const { name, contact, notes } = req.body;
     try {
         const result = await db.query(
@@ -62,7 +112,7 @@ app.get('/api/chits', async (req, res) => {
 });
 
 // Create chit
-app.post('/api/chits', authenticateToken, async (req, res) => {
+app.post('/api/chits', authenticateToken, requireAdmin, async (req, res) => {
     const { name, total_amount, start_date, duration_months, commission_percent } = req.body;
     const commission = commission_percent || 5.0;
     try {
@@ -77,7 +127,7 @@ app.post('/api/chits', authenticateToken, async (req, res) => {
 });
 
 // Add member to chit
-app.post('/api/chits/:id/members', authenticateToken, async (req, res) => {
+app.post('/api/chits/:id/members', authenticateToken, requireAdmin, async (req, res) => {
     const { member_id } = req.body;
     const chit_id = req.params.id;
     try {
@@ -123,7 +173,7 @@ app.get('/api/chits/:id/members', async (req, res) => {
 // --- CYCLES ---
 
 // Record a cycle
-app.post('/api/chits/:id/cycles', authenticateToken, async (req, res) => {
+app.post('/api/chits/:id/cycles', authenticateToken, requireAdmin, async (req, res) => {
     const { month_number, month_year, bid_amount, winner_member_id } = req.body;
     const chit_id = req.params.id;
     try {
@@ -167,7 +217,7 @@ app.get('/api/cycles/:id/payments', async (req, res) => {
 });
 
 // Update payment status
-app.post('/api/cycles/:id/payments', authenticateToken, async (req, res) => {
+app.post('/api/cycles/:id/payments', authenticateToken, requireAdmin, async (req, res) => {
     const { member_id, status } = req.body;
     const cycle_id = req.params.id;
     const paid_date = status === 'paid' ? new Date().toISOString() : null;
@@ -217,6 +267,47 @@ app.get('/api/summary', async (req, res) => {
         });
 
         res.json(summary);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- DASHBOARD ---
+// Get current month payment status
+app.get('/api/dashboard/current-month-status', async (req, res) => {
+    try {
+        // Get current month/year
+        const now = new Date();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        const currentMonthYear = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+        const sql = `
+            SELECT 
+                c.id as chit_id,
+                c.name as chit_name,
+                cc.id as cycle_id,
+                cc.month_year,
+                (SELECT COUNT(*) FROM chit_members WHERE chit_id = c.id)::int as total_members,
+                (SELECT COUNT(*) FROM cycle_payments 
+                 WHERE cycle_id = cc.id AND status = 'paid')::int as paid_count
+            FROM chit_cycles cc
+            JOIN chits c ON cc.chit_id = c.id
+            WHERE cc.month_year = $1 AND c.status = 'active'
+            ORDER BY c.name
+        `;
+
+        const result = await db.query(sql, [currentMonthYear]);
+
+        const status = result.rows.map(row => ({
+            ...row,
+            pending_count: row.total_members - row.paid_count
+        }));
+
+        res.json({
+            current_month: currentMonthYear,
+            chits: status
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
